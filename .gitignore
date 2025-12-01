@@ -1,0 +1,11 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+
+# IDE and editor files
+.vscode/
+
+# OS generated files
+.DS_Store
