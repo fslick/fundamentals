@@ -4,6 +4,7 @@ Valuation
 
 Cash Flow
 - Free Cash Flow Yield
+- Free Cash Flow Yield Change over quarter
 
 Margins & Growth
 - Profit Margin
