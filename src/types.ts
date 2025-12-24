@@ -1,63 +1,14 @@
-export interface CashFlow {
-    TYPE: "CASH_FLOW";
-    date: Date;
-    deferredTax: number;
-    periodType: string;
-    operatingCashFlow: number;
-    changeInAccountPayable: number;
-    netInvestmentPurchaseAndSale: number;
-    changeInPayable: number;
-    commonStockDividendPaid: number;
-    incomeTaxPaidSupplementalData: number;
-    netCommonStockIssuance: number;
-    netBusinessPurchaseAndSale: number;
-    endCashPosition: number;
-    effectOfExchangeRateChanges: number;
-    netLongTermDebtIssuance: number;
-    cashFlowFromContinuingFinancingActivities: number;
-    depreciationAndAmortization: number;
-    changesInCash: number;
-    netOtherInvestingChanges: number;
-    commonStockPayments: number;
-    otherNonCashItems: number;
-    purchaseOfBusiness: number;
-    financingCashFlow: number;
-    purchaseOfPPE: number;
-    freeCashFlow: number;
-    changeInOtherCurrentAssets: number;
-    changeInPrepaidAssets: number;
-    longTermDebtPayments: number;
-    purchaseOfInvestment: number;
-    capitalExpenditure: number;
-    changesInAccountReceivables: number;
-    cashDividendsPaid: number;
-    beginningCashPosition: number;
-    netPPEPurchaseAndSale: number;
-    investingCashFlow: number;
-    changeInOtherCurrentLiabilities: number;
-    depreciationAmortizationDepletion: number;
-    changeInReceivables: number;
-    changeInWorkingCapital: number;
-    repaymentOfDebt: number;
-    cashFlowFromContinuingOperatingActivities: number;
-    repurchaseOfCapitalStock: number;
-    saleOfInvestment: number;
-    changeInPayablesAndAccruedExpense: number;
-    interestPaidSupplementalData: number;
-    changeInAccruedExpense: number;
-    netIncomeFromContinuingOperations: number;
-    stockBasedCompensation: number;
-    cashFlowFromContinuingInvestingActivities: number;
-    netIssuancePaymentsOfDebt: number;
-    netOtherFinancingCharges: number;
-    deferredIncomeTax: number;
-}
+type PeriodType = "3M" | "12M";
 
-export interface StatementPayload {
+export type QuarterlyStatement = StatementPayload<"3M">;
+
+export type AnnualStatement = StatementPayload<"12M">;
+
+export interface StatementPayload<T extends PeriodType> {
     TYPE: "ALL"
     date: string;
     sellingGeneralAndAdministration?: number;
-    periodType?: string;
+    periodType: T;
     otherEquityAdjustments?: number;
     freeCashFlow?: number;
     operatingIncome?: number;

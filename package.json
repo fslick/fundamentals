@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "description": "",
-  "main": "dist/index.js",
+  "main": "dist/main.js",
   "scripts": {
-    "build": "tsc",
-    "dev": "tsx src/index.ts",
-    "start": "node dist/index.js",
+    "build": "npx tsc",
+    "dev": "bun run src/main.ts",
+    "start": "node dist/main.js",
     "clean": "rm -rf dist"
   },
   "keywords": [],
