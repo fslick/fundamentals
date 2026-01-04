@@ -48,6 +48,53 @@ async function convertCurrencyInStatements<T extends StatementPayload<PeriodType
 	});
 }
 
+interface StatisticsInput {
+	date: moment.Moment;
+	close: number;
+	sharesOutstanding: number;
+	dilutedSharesOutstanding: number;
+	netIncome: number;
+	freeCashFlow: number;
+	stockBasedCompensation: number;
+	eps: number;
+	totalCash: number | undefined;
+	totalDebt: number | undefined;
+}
+
+function calculateValuationMetrics(input: StatisticsInput) {
+	const {
+		close, sharesOutstanding, dilutedSharesOutstanding, netIncome, freeCashFlow,
+		stockBasedCompensation, eps, date, totalCash, totalDebt
+	} = input;
+
+	const marketCap = close * sharesOutstanding;
+	const dilutedMarketCap = close * dilutedSharesOutstanding;
+
+	return {
+		date,
+		close,
+		sharesOutstanding,
+		dilutedSharesOutstanding,
+		marketCap,
+		dilutedMarketCap,
+		netIncome,
+		freeCashFlow,
+		stockBasedCompensation,
+		eps,
+		pe: eps ? close / eps : null,
+		fcfYield: freeCashFlow ? freeCashFlow / marketCap : null,
+		fcfYieldAdjusted: (freeCashFlow && stockBasedCompensation)
+			? (freeCashFlow - stockBasedCompensation) / dilutedMarketCap
+			: null,
+		fcfPerShare: freeCashFlow ? freeCashFlow / sharesOutstanding : null,
+		fcfPerShareAdjusted: (freeCashFlow && stockBasedCompensation)
+			? (freeCashFlow - stockBasedCompensation) / dilutedSharesOutstanding
+			: null,
+		totalCash,
+		totalDebt
+	};
+}
+
 function calculateTrailingStatistics(allStatements: QuarterlyStatement[], prices: ChartResultArrayQuote[]) {
 	if (allStatements.length < 4) {
 		return null;
@@ -61,24 +108,23 @@ function calculateTrailingStatistics(allStatements: QuarterlyStatement[], prices
 	}
 	const netIncome = _(statements).map(statement => statement.netIncome).sum();
 	const freeCashFlow = _(statements).map(statement => statement.freeCashFlow).sum();
+	const stockBasedCompensation = _(statements).map(statement => statement.stockBasedCompensation).sum();
 	const eps = _(statements).sumBy(s => (s.netIncome && sharesOutstanding) ? s.netIncome / sharesOutstanding : 0);
 	const date = lastStatement.date;
 	const close = priceOn(date, prices);
-	const marketCap = close * sharesOutstanding;
-	return {
-		date: date,
-		close: close,
-		sharesOutstanding: sharesOutstanding,
-		marketCap: marketCap,
-		netIncome: netIncome,
-		freeCashFlow: freeCashFlow,
-		eps: eps,
-		pe: close / eps,
-		fcfYield: freeCashFlow / marketCap,
-		fcfPerShare: freeCashFlow / sharesOutstanding,
+
+	return calculateValuationMetrics({
+		date,
+		close,
+		sharesOutstanding,
+		dilutedSharesOutstanding: lastStatement.dilutedAverageShares || sharesOutstanding,
+		netIncome,
+		freeCashFlow,
+		stockBasedCompensation,
+		eps,
 		totalCash: lastStatement.cashCashEquivalentsAndShortTermInvestments || lastStatement.cashAndCashEquivalents,
 		totalDebt: lastStatement.totalDebt
-	};
+	});
 }
 
 async function getTTMStatistics(
@@ -106,20 +152,18 @@ async function getTTMStatistics(
 		return null;
 	}
 
-	return {
+	return calculateValuationMetrics({
 		date: statement.date,
-		close: close,
-		sharesOutstanding: sharesOutstanding,
-		marketCap: close * sharesOutstanding,
+		close,
+		sharesOutstanding,
+		dilutedSharesOutstanding: statement.dilutedAverageShares || sharesOutstanding,
 		netIncome: statement.netIncome,
 		freeCashFlow: statement.freeCashFlow,
+		stockBasedCompensation: statement.stockBasedCompensation || 0,
 		eps: statement.basicEPS!,
-		pe: close / statement.basicEPS!,
-		fcfYield: statement.freeCashFlow / (close * sharesOutstanding),
-		fcfPerShare: statement.freeCashFlow / sharesOutstanding,
 		totalCash: statement.cashCashEquivalentsAndShortTermInvestments || statement.cashAndCashEquivalents,
 		totalDebt: statement.totalDebt
-	};
+	});
 }
 
 function calculateGrowth(statementsInput: (QuarterlyStatement | AnnualStatement)[]) {
@@ -240,11 +284,12 @@ async function processSymbol(symbol: string) {
 			})(),
 		},
 		valuation: {
-			calcultedTrailingPE: thisPeriod?.netIncome && sharesOutstanding ? (sharesOutstanding * price) / thisPeriod.netIncome : quoteSummary.summaryDetail!.trailingPE,
 			trailingPE: quoteSummary.summaryDetail!.trailingPE,
 			forwardPE: quoteSummary.summaryDetail!.forwardPE,
 			fcfYield: thisPeriod?.freeCashFlow && marketCap ? thisPeriod.freeCashFlow / marketCap : null,
+			fcfYieldAdjusted: thisPeriod?.fcfYieldAdjusted ?? null,
 			fcfPerShare: thisPeriod?.freeCashFlow && sharesOutstanding ? thisPeriod.freeCashFlow / sharesOutstanding : null,
+			fcfPerShareAdjusted: thisPeriod?.fcfPerShareAdjusted ?? null,
 			trailingEPS: quoteSummary.defaultKeyStatistics!.trailingEps,
 			forwardEPS: quoteSummary.defaultKeyStatistics!.forwardEps,
 			priceToSales: quoteSummary.summaryDetail!.priceToSalesTrailing12Months,
@@ -285,9 +330,11 @@ function flattenObject(obj: any, prefix = ""): any {
 	}, {});
 }
 
-async function saveResultsToCsv(results: Awaited<ReturnType<typeof processSymbol>>[], path: string) {
+async function saveResultsToCsv(results: Awaited<ReturnType<typeof processSymbol>>[]) {
 	const flattened = results.map(r => flattenObject(r));
-	await saveToCsv(flattened, path);
+	const flattenedPath = "./output/report.csv";
+	await saveToCsv(flattened, flattenedPath);
+	log(`Report available at ${flattenedPath}`);
 
 	const symbolKeyValues = _(flattened)
 		.flatMap(item => {
@@ -297,8 +344,17 @@ async function saveResultsToCsv(results: Awaited<ReturnType<typeof processSymbol
 				value
 			}));
 		})
+		.filter(item => {
+			const v = item.value;
+			const withoutValue = v === null || v === undefined || v === "";
+			const isEmptyObject = _.isPlainObject(v) && _.isEmpty(v);
+			return !(withoutValue || isEmptyObject);
+		})
 		.value();
-	await saveToCsv(symbolKeyValues, "./output/symbolKeyValues.csv");
+
+	const symbolKeyValuesPath = "./output/symbolKeyValues.csv";
+	await saveToCsv(symbolKeyValues, symbolKeyValuesPath);
+	log(`File with key values available at ${symbolKeyValuesPath}`);
 }
 
 async function processAndSave(symbols: string[]) {
@@ -306,14 +362,14 @@ async function processAndSave(symbols: string[]) {
 	for (const symbol of symbols) {
 		results.push(await processSymbol(symbol));
 	}
-	await saveResultsToCsv(results, "./output/report.csv");
+	await saveResultsToCsv(results);
 	return results;
 }
 
 async function processAndSaveParallel(symbols: string[], parallelism = 2) {
 	const limit = pLimit(parallelism);
 	const results = await Promise.all(symbols.map(symbol => limit(() => processSymbol(symbol))));
-	await saveResultsToCsv(results, "./output/report.csv");
+	await saveResultsToCsv(results);
 	return results;
 }
 
@@ -331,7 +387,7 @@ async function main() {
 		.map(s => s.symbol)
 		.value();
 
-	await processAndSaveParallel(sampledSymbols, 2);
+	await processAndSaveParallel(sampledSymbols, 3);
 	console.log("Done");
 }
 

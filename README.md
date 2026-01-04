@@ -15,7 +15,7 @@
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) (v18+ recommended)
-- [Bun](https://bun.sh/) (optional, but used in dev scripts) or `npm`
+- [Bun](https://bun.sh/)
 
 ## Installation
 
